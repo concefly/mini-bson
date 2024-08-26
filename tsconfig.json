@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "ESNext",
+    "strict": true,
+    "declaration": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "allowJs": true,
+    "esModuleInterop": true,
+    "lib": ["es2022", "dom", "esnext"],
+    "jsx": "react",
+    "resolveJsonModule": true
+  },
+  "include": ["src", "__test__", "stories", "cypress", "cypress.config.ts"]
+}

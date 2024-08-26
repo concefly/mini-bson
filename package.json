@@ -1,0 +1,31 @@
+{
+  "name": "mini-bson",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "jest",
+    "ci": "prettier --check src && tsc -p tsconfig.json --noEmit && eslint && npm run ci:e2e",
+    "build": "tsc -p tsconfig.build.json --outDir dist",
+    "release": "npm run ci && rimraf -rf dist && npm run build && release-it",
+    "storybook": "storybook dev -p 6007 --no-open",
+    "build-storybook": "storybook build",
+    "cypress:open": "cypress open",
+    "ci:e2e": "bash e2e.sh",
+    "prepare": "husky"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "husky": "^9.1.5",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.4",
+    "release-it": "^17.0.1",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.5.2"
+  },
+  "sideEffects": true
+}
