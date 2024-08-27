@@ -1,14 +1,18 @@
 import { ElementType } from './const';
+import { setFloat64LE, setInt32LE } from './util';
 
 export type ISerializeOptions = {
   minBufferSize?: number;
   textEncoderCache?: Map<string, Uint8Array>;
+  workingBuffer?: Uint8Array;
 };
 
 type ICtx = { buffer: Uint8Array; offset: number; encodeUTF8: (str: string) => Uint8Array };
 
+const DEFAULT_BUFFER = new Uint8Array(1024 * 1024 * 2); // 2MB
+
 export function serialize<T extends Record<string, any>>(obj: T, opt?: ISerializeOptions): Uint8Array {
-  const minBufferSize = opt?.minBufferSize || 1024 * 1024 * 2; // 2MB
+  const workingBuffer = opt?.workingBuffer || DEFAULT_BUFFER;
   const textEncoderCache = opt?.textEncoderCache;
 
   const encoder = new TextEncoder();
@@ -24,7 +28,7 @@ export function serialize<T extends Record<string, any>>(obj: T, opt?: ISerializ
     return encoded;
   };
 
-  const ctx: ICtx = { buffer: new Uint8Array(minBufferSize), offset: 0, encodeUTF8 };
+  const ctx: ICtx = { buffer: workingBuffer, offset: 0, encodeUTF8 };
   encode_document(ctx, obj);
 
   return ctx.buffer.slice(0, ctx.offset);
@@ -42,16 +46,13 @@ function encode_unsigned_byte(ctx: ICtx, byte: number) {
 
 // int32 (little-endian)
 function encode_int32(ctx: ICtx, value: number) {
-  ctx.buffer[ctx.offset++] = value & 0xff;
-  ctx.buffer[ctx.offset++] = (value >> 8) & 0xff;
-  ctx.buffer[ctx.offset++] = (value >> 16) & 0xff;
-  ctx.buffer[ctx.offset++] = (value >> 24) & 0xff;
+  setInt32LE(ctx.buffer, ctx.offset, value);
+  ctx.offset += 4;
 }
 
 // double
 function encode_double(ctx: ICtx, value: number) {
-  const view = new DataView(ctx.buffer.buffer);
-  view.setFloat64(ctx.offset, value, true);
+  setFloat64LE(ctx.buffer, ctx.offset, value);
   ctx.offset += 8;
 }
 
@@ -89,8 +90,7 @@ function encode_document(ctx: ICtx, value: Record<string, any>) {
   const offset1 = ctx.offset;
   const length = offset1 - offset0;
 
-  const view = new DataView(ctx.buffer.buffer);
-  view.setInt32(offset0, length, true);
+  setInt32LE(ctx.buffer, offset0, length);
 }
 
 // element
