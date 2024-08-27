@@ -5,6 +5,7 @@ export type ISerializeOptions = {
   minBufferSize?: number;
   textEncoderCache?: Map<string, Uint8Array>;
   workingBuffer?: Uint8Array;
+  duplicate?: boolean;
 };
 
 type ICtx = { buffer: Uint8Array; offset: number; encodeUTF8: (str: string) => Uint8Array };
@@ -31,7 +32,9 @@ export function serialize<T extends Record<string, any>>(obj: T, opt?: ISerializ
   const ctx: ICtx = { buffer: workingBuffer, offset: 0, encodeUTF8 };
   encode_document(ctx, obj);
 
-  return ctx.buffer.slice(0, ctx.offset);
+  const duplicate = opt?.duplicate;
+
+  return duplicate ? ctx.buffer.subarray(0, ctx.offset) : ctx.buffer.slice(0, ctx.offset);
 }
 
 // signed byte
