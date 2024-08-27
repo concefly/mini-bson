@@ -2,17 +2,20 @@ import { ElementType } from './const';
 
 export type ISerializeOptions = {
   minBufferSize?: number;
+  textEncoderCache?: Map<string, Uint8Array>;
 };
 
 type ICtx = { buffer: Uint8Array; offset: number; encodeUTF8: (str: string) => Uint8Array };
 
 export function serialize<T extends Record<string, any>>(obj: T, opt?: ISerializeOptions): Uint8Array {
   const minBufferSize = opt?.minBufferSize || 1024 * 1024 * 2; // 2MB
+  const textEncoderCache = opt?.textEncoderCache;
 
-  const textEncoderCache = new Map<string, Uint8Array>();
   const encoder = new TextEncoder();
 
   const encodeUTF8 = (str: string) => {
+    if (!textEncoderCache) return encoder.encode(str);
+
     let encoded = textEncoderCache.get(str);
     if (!encoded) {
       encoded = encoder.encode(str);
