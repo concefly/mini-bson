@@ -1,6 +1,6 @@
 import Benchmark from 'benchmark';
 import data1 from './fixtures/data1.json';
-import { serialize } from '../src';
+import { deserialize, serialize } from '../src';
 import { BSON } from 'bson';
 import { setFloat64LE } from '../src/util';
 
@@ -33,7 +33,7 @@ it('textEncoderCache', done => {
     .run({});
 });
 
-it('vs mongodb bson', done => {
+it('serialize', done => {
   const suite = new Benchmark.Suite();
   const textEncoderCache = new Map();
 
@@ -43,6 +43,29 @@ it('vs mongodb bson', done => {
     })
     .add('mini-bson', function () {
       serialize(bigData, { textEncoderCache });
+    })
+    .on('cycle', function (event: any) {
+      // console.log(String(event.target));
+    })
+    .on('complete', function () {
+      const fastest = suite.filter('fastest').map('name');
+      expect(fastest).toEqual(['mini-bson']);
+
+      done();
+    })
+    .run({});
+});
+
+it('deserialize', done => {
+  const suite = new Benchmark.Suite();
+  const bin = serialize(bigData);
+
+  suite
+    .add('mongodb', function () {
+      BSON.deserialize(bin);
+    })
+    .add('mini-bson', function () {
+      deserialize(bin);
     })
     .on('cycle', function (event: any) {
       // console.log(String(event.target));
