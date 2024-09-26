@@ -8,7 +8,12 @@ export type ISerializeOptions = {
   duplicate?: boolean;
 };
 
-type ICtx = { buffer: Uint8Array; offset: number; encodeUTF8: (str: string) => Uint8Array };
+export type ISerializeCountOptions = {
+  textEncoderCache?: Map<string, Uint8Array>;
+  maxLimit?: number;
+};
+
+type ICtx = { buffer: Uint8Array; offset: number; dryRun?: boolean; dryRunMaxLimit?: number; encodeUTF8: (str: string) => Uint8Array };
 
 const DEFAULT_BUFFER = new Uint8Array(1024 * 1024 * 2); // 2MB
 
@@ -37,26 +42,68 @@ export function serialize<T extends Record<string, any>>(obj: T, opt?: ISerializ
   return duplicate ? ctx.buffer.subarray(0, ctx.offset) : ctx.buffer.slice(0, ctx.offset);
 }
 
+export function serializeLength<T extends Record<string, any>>(obj: T, opt?: ISerializeCountOptions): number {
+  const textEncoderCache = opt?.textEncoderCache;
+  const encoder = new TextEncoder();
+
+  const encodeUTF8 = (str: string) => {
+    if (!textEncoderCache) return encoder.encode(str);
+
+    let encoded = textEncoderCache.get(str);
+    if (!encoded) {
+      encoded = encoder.encode(str);
+      textEncoderCache.set(str, encoded);
+    }
+    return encoded;
+  };
+
+  const ctx: ICtx = { buffer: null as any, offset: 0, encodeUTF8, dryRun: true, dryRunMaxLimit: opt?.maxLimit };
+  encode_document(ctx, obj);
+
+  const length = ctx.offset;
+  return length;
+}
+
 // signed byte
 function encode_signed_byte(ctx: ICtx, byte: number) {
-  ctx.buffer[ctx.offset++] = byte;
+  if (ctx.dryRun) {
+    ctx.offset++;
+    _dryRunMaxLimitTest(ctx);
+  } else {
+    ctx.buffer[ctx.offset++] = byte;
+  }
 }
 
 // unsigned byte
 function encode_unsigned_byte(ctx: ICtx, byte: number) {
-  ctx.buffer[ctx.offset++] = byte & 0xff;
+  if (ctx.dryRun) {
+    ctx.offset++;
+    _dryRunMaxLimitTest(ctx);
+  } else {
+    ctx.buffer[ctx.offset++] = byte & 0xff;
+  }
 }
 
 // int32 (little-endian)
 function encode_int32(ctx: ICtx, value: number) {
-  setInt32LE(ctx.buffer, ctx.offset, value);
-  ctx.offset += 4;
+  if (ctx.dryRun) {
+    ctx.offset += 4;
+    _dryRunMaxLimitTest(ctx);
+  } else {
+    setInt32LE(ctx.buffer, ctx.offset, value);
+    ctx.offset += 4;
+  }
 }
 
 // double
 function encode_double(ctx: ICtx, value: number) {
-  setFloat64LE(ctx.buffer, ctx.offset, value);
-  ctx.offset += 8;
+  if (ctx.dryRun) {
+    ctx.offset += 8;
+    _dryRunMaxLimitTest(ctx);
+  } else {
+    setFloat64LE(ctx.buffer, ctx.offset, value);
+    ctx.offset += 8;
+  }
 }
 
 // string
@@ -64,19 +111,28 @@ function encode_string(ctx: ICtx, value: string) {
   const encoded = ctx.encodeUTF8(value);
   encode_int32(ctx, encoded.length + 1);
 
-  ctx.buffer.set(encoded, ctx.offset);
-  ctx.offset += encoded.length;
-
-  encode_unsigned_byte(ctx, 0);
+  if (ctx.dryRun) {
+    ctx.offset += encoded.length + 1;
+    _dryRunMaxLimitTest(ctx);
+  } else {
+    ctx.buffer.set(encoded, ctx.offset);
+    ctx.offset += encoded.length;
+    encode_unsigned_byte(ctx, 0);
+  }
 }
 
 // cstring
 function encode_cstring(ctx: ICtx, value: string) {
   const encoded = ctx.encodeUTF8(value);
-  ctx.buffer.set(encoded, ctx.offset);
-  ctx.offset += encoded.length;
 
-  encode_unsigned_byte(ctx, 0);
+  if (ctx.dryRun) {
+    ctx.offset += encoded.length + 1;
+    _dryRunMaxLimitTest(ctx);
+  } else {
+    ctx.buffer.set(encoded, ctx.offset);
+    ctx.offset += encoded.length;
+    encode_unsigned_byte(ctx, 0);
+  }
 }
 
 // document
@@ -90,10 +146,14 @@ function encode_document(ctx: ICtx, value: Record<string, any>) {
 
   encode_unsigned_byte(ctx, 0);
 
-  const offset1 = ctx.offset;
-  const length = offset1 - offset0;
+  if (ctx.dryRun) {
+    _dryRunMaxLimitTest(ctx);
+  } else {
+    const offset1 = ctx.offset;
+    const length = offset1 - offset0;
 
-  setInt32LE(ctx.buffer, offset0, length);
+    setInt32LE(ctx.buffer, offset0, length);
+  }
 }
 
 // element
@@ -133,4 +193,10 @@ function encode_element(ctx: ICtx, value: any, key: string) {
   else if (typeNum === ElementType.Null) {
   } else if (typeNum === ElementType.Undefined) {
   } else throw new Error('Unsupported type num: ' + typeNum);
+}
+
+function _dryRunMaxLimitTest(ctx: ICtx) {
+  if (ctx.dryRun && ctx.dryRunMaxLimit && ctx.offset > ctx.dryRunMaxLimit) {
+    throw new Error('Exceed max limit: ' + ctx.dryRunMaxLimit);
+  }
 }
