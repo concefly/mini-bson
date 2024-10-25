@@ -1,5 +1,5 @@
 import { ElementType } from './const';
-import { setFloat64LE, setInt32LE } from './util';
+import { batchCall, FLOAT64, FLOAT64_BYTES, setFloat64LE, setInt32LE } from './util';
 
 export type ISerializeOptions = {
   minBufferSize?: number;
@@ -16,12 +16,11 @@ export type ISerializeCountOptions = {
 type ICtx = { buffer: Uint8Array; offset: number; dryRun?: boolean; dryRunMaxLimit?: number; encodeUTF8: (str: string) => Uint8Array };
 
 const DEFAULT_BUFFER = new Uint8Array(1024 * 1024 * 2); // 2MB
+const encoder = new TextEncoder();
 
 export function serialize<T extends Record<string, any>>(obj: T, opt?: ISerializeOptions): Uint8Array {
   const workingBuffer = opt?.workingBuffer || DEFAULT_BUFFER;
   const textEncoderCache = opt?.textEncoderCache;
-
-  const encoder = new TextEncoder();
 
   const encodeUTF8 = (str: string) => {
     if (!textEncoderCache) return encoder.encode(str);
@@ -136,12 +135,18 @@ function encode_cstring(ctx: ICtx, value: string) {
 }
 
 // document
-function encode_document(ctx: ICtx, value: Record<string, any>) {
+function encode_document(ctx: ICtx, value: Record<string, any> | any[]) {
   const offset0 = ctx.offset;
   ctx.offset += 4; // reserve 4 bytes for length
 
-  for (const [k, v] of Object.entries(value)) {
-    encode_element(ctx, v, k);
+  if (Array.isArray(value)) {
+    batchCall(value, (v, i) => {
+      encode_element(ctx, v, i + '');
+    });
+  } else {
+    batchCall(Object.entries(value), ([k, v]) => {
+      encode_element(ctx, v, k);
+    });
   }
 
   encode_unsigned_byte(ctx, 0);
@@ -184,15 +189,32 @@ function encode_element(ctx: ICtx, value: any, key: string) {
   encode_signed_byte(ctx, typeNum);
   encode_cstring(ctx, key);
 
-  if (typeNum === ElementType.Double) encode_double(ctx, value);
-  else if (typeNum === ElementType.Int32) encode_int32(ctx, value);
-  else if (typeNum === ElementType.String) encode_string(ctx, value);
-  else if (typeNum === ElementType.Document) encode_document(ctx, value);
-  else if (typeNum === ElementType.Array) encode_document(ctx, Object.fromEntries(Object.entries(value)));
-  else if (typeNum === ElementType.Boolean) encode_unsigned_byte(ctx, value ? 1 : 0);
-  else if (typeNum === ElementType.Null) {
-  } else if (typeNum === ElementType.Undefined) {
-  } else throw new Error('Unsupported type num: ' + typeNum);
+  switch (typeNum) {
+    case ElementType.Double:
+      encode_double(ctx, value);
+      break;
+    case ElementType.Int32:
+      encode_int32(ctx, value);
+      break;
+    case ElementType.String:
+      encode_string(ctx, value);
+      break;
+    case ElementType.Document:
+    case ElementType.Array:
+      encode_document(ctx, value);
+      break;
+    case ElementType.Boolean:
+      encode_unsigned_byte(ctx, value ? 1 : 0);
+      break;
+    case ElementType.Null:
+      // skip
+      break;
+    case ElementType.Undefined:
+      // skip
+      break;
+    default:
+      throw new Error('Unsupported type num: ' + typeNum);
+  }
 }
 
 function _dryRunMaxLimitTest(ctx: ICtx) {
