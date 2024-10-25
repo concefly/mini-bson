@@ -1,3 +1,4 @@
+import { it, expect } from 'vitest';
 import { deserialize, serialize } from '../src';
 import data1 from './fixtures/data1.json';
 
