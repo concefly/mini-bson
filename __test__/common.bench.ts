@@ -12,25 +12,41 @@ for (const key of Array.from({ length: 1000 }, (_, i) => i)) {
 describe('textEncoderCache', () => {
   const textEncoderCache = new Map();
 
-  bench('default', () => {
-    serialize(bigData);
-  });
+  bench(
+    'default',
+    () => {
+      serialize(bigData);
+    },
+    { throws: true }
+  );
 
-  bench('with cache', () => {
-    serialize(bigData, { textEncoderCache });
-  });
+  bench(
+    'with cache',
+    () => {
+      serialize(bigData, { textEncoderCache });
+    },
+    { throws: true }
+  );
 });
 
 describe('serialize', () => {
   const textEncoderCache = new Map();
 
-  bench('mongodb', () => {
-    BSON.serialize(bigData);
-  });
+  bench(
+    'mongodb',
+    () => {
+      BSON.serialize(bigData);
+    },
+    { throws: true }
+  );
 
-  bench('mini-bson', () => {
-    serialize(bigData, { textEncoderCache });
-  });
+  bench(
+    'mini-bson',
+    () => {
+      serialize(bigData, { textEncoderCache });
+    },
+    { throws: true }
+  );
 });
 
 describe('serialize numbers', () => {
@@ -41,41 +57,61 @@ describe('serialize numbers', () => {
     ns: Array.from({ length: 10000 }, (_, i) => i),
   };
 
-  bench('mongodb', () => {
-    BSON.serialize(data);
-    BSON.serialize(data);
-    BSON.serialize(data);
-  });
+  bench(
+    'mongodb',
+    () => {
+      const bin = BSON.serialize(data);
+    },
+    { throws: true }
+  );
 
-  bench('mini-bson', () => {
-    serialize(data, { textEncoderCache, workingBuffer });
-    serialize(data, { textEncoderCache, workingBuffer });
-    serialize(data, { textEncoderCache, workingBuffer });
-  });
+  bench(
+    'mini-bson',
+    () => {
+      const bin = serialize(data, { textEncoderCache, workingBuffer });
+    },
+    { throws: true }
+  );
 });
 
 describe('deserialize', () => {
   const bin = serialize(bigData);
 
-  bench('mongodb', () => {
-    BSON.deserialize(bin);
-  });
+  bench(
+    'mongodb',
+    () => {
+      BSON.deserialize(bin);
+    },
+    { throws: true }
+  );
 
-  bench('mini-bson', () => {
-    deserialize(bin);
-  });
+  bench(
+    'mini-bson',
+    () => {
+      deserialize(bin);
+    },
+    { throws: true }
+  );
 });
 
 describe('dataview', () => {
   const num = Math.PI;
   const buffer = new Uint8Array(8);
 
-  bench('DataView', () => {
-    const view = new DataView(buffer.buffer);
-    view.setFloat64(0, num, true);
-  });
+  bench(
+    'DataView',
+    () => {
+      const view = new DataView(buffer.buffer);
+      view.setFloat64(0, num, true);
+    },
+    { throws: true }
+  );
 
-  bench('util', () => {
-    setFloat64LE(buffer, 0, num);
-  });
+  bench(
+    'util',
+    () => {
+      setFloat64LE(buffer, 0, num);
+    },
+    { throws: true }
+  );
 });

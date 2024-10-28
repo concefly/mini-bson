@@ -22,16 +22,18 @@ export function serialize<T extends Record<string, any>>(obj: T, opt?: ISerializ
   const workingBuffer = opt?.workingBuffer || DEFAULT_BUFFER;
   const textEncoderCache = opt?.textEncoderCache;
 
-  const encodeUTF8 = (str: string) => {
-    if (!textEncoderCache) return encoder.encode(str);
+  const encodeUTF8 = textEncoderCache
+    ? (str: string) => {
+        let encoded = textEncoderCache.get(str);
 
-    let encoded = textEncoderCache.get(str);
-    if (!encoded) {
-      encoded = encoder.encode(str);
-      textEncoderCache.set(str, encoded);
-    }
-    return encoded;
-  };
+        if (!encoded) {
+          encoded = encoder.encode(str);
+          textEncoderCache.set(str, encoded);
+        }
+
+        return encoded;
+      }
+    : (str: string) => encoder.encode(str);
 
   const ctx: ICtx = { buffer: workingBuffer, offset: 0, encodeUTF8 };
   encode_document(ctx, obj);
@@ -61,26 +63,6 @@ export function serializeLength<T extends Record<string, any>>(obj: T, opt?: ISe
 
   const length = ctx.offset;
   return length;
-}
-
-// signed byte
-function encode_signed_byte(ctx: ICtx, byte: number) {
-  if (ctx.dryRun) {
-    ctx.offset++;
-    _dryRunMaxLimitTest(ctx);
-  } else {
-    ctx.buffer[ctx.offset++] = byte;
-  }
-}
-
-// unsigned byte
-function encode_unsigned_byte(ctx: ICtx, byte: number) {
-  if (ctx.dryRun) {
-    ctx.offset++;
-    _dryRunMaxLimitTest(ctx);
-  } else {
-    ctx.buffer[ctx.offset++] = byte & 0xff;
-  }
 }
 
 // int32 (little-endian)
@@ -115,8 +97,8 @@ function encode_string(ctx: ICtx, value: string) {
     _dryRunMaxLimitTest(ctx);
   } else {
     ctx.buffer.set(encoded, ctx.offset);
-    ctx.offset += encoded.length;
-    encode_unsigned_byte(ctx, 0);
+    ctx.buffer[ctx.offset + encoded.length] = 0;
+    ctx.offset += encoded.length + 1;
   }
 }
 
@@ -129,8 +111,8 @@ function encode_cstring(ctx: ICtx, value: string) {
     _dryRunMaxLimitTest(ctx);
   } else {
     ctx.buffer.set(encoded, ctx.offset);
-    ctx.offset += encoded.length;
-    encode_unsigned_byte(ctx, 0);
+    ctx.buffer[ctx.offset + encoded.length] = 0;
+    ctx.offset += encoded.length + 1;
   }
 }
 
@@ -149,11 +131,12 @@ function encode_document(ctx: ICtx, value: Record<string, any> | any[]) {
     });
   }
 
-  encode_unsigned_byte(ctx, 0);
-
   if (ctx.dryRun) {
+    ctx.offset++;
     _dryRunMaxLimitTest(ctx);
   } else {
+    ctx.buffer[ctx.offset++] = 0;
+
     const offset1 = ctx.offset;
     const length = offset1 - offset0;
 
@@ -186,7 +169,14 @@ function encode_element(ctx: ICtx, value: any, key: string) {
     throw new Error('Unsupported type: ' + typeof value);
   }
 
-  encode_signed_byte(ctx, typeNum);
+  // encode signed byte
+  if (ctx.dryRun) {
+    ctx.offset++;
+    _dryRunMaxLimitTest(ctx);
+  } else {
+    ctx.buffer[ctx.offset++] = typeNum;
+  }
+
   encode_cstring(ctx, key);
 
   switch (typeNum) {
@@ -204,7 +194,13 @@ function encode_element(ctx: ICtx, value: any, key: string) {
       encode_document(ctx, value);
       break;
     case ElementType.Boolean:
-      encode_unsigned_byte(ctx, value ? 1 : 0);
+      if (ctx.dryRun) {
+        ctx.offset++;
+        _dryRunMaxLimitTest(ctx);
+      } else {
+        ctx.buffer[ctx.offset++] = value ? 1 : 0;
+      }
+
       break;
     case ElementType.Null:
       // skip
