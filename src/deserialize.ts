@@ -34,7 +34,7 @@ function decode_double(ctx: ICtx): number {
 
 function decode_string(ctx: ICtx): string {
   const length = decode_int32(ctx);
-  const value = decoder.decode(ctx.buffer.slice(ctx.offset, ctx.offset + length - 1));
+  const value = decoder.decode(ctx.buffer.subarray(ctx.offset, ctx.offset + length - 1));
   ctx.offset += length - 1 + 1; // Skip the last 0x00
   return value;
 }
@@ -42,11 +42,23 @@ function decode_string(ctx: ICtx): string {
 function decode_cstring(ctx: ICtx): string {
   const start = ctx.offset;
   while (ctx.buffer[ctx.offset++] !== 0) {}
-  return decoder.decode(ctx.buffer.slice(start, ctx.offset - 1));
+  return decoder.decode(ctx.buffer.subarray(start, ctx.offset - 1));
 }
 
 function decode_boolean(ctx: ICtx): boolean {
   return decode_unsigned_byte(ctx) === 1;
+}
+
+function decode_binary(ctx: ICtx): Uint8Array {
+  const length = decode_int32(ctx);
+
+  const subtype = decode_unsigned_byte(ctx);
+  if (subtype !== 0) throw new Error('Unsupported binary subtype: ' + subtype);
+
+  const value = ctx.buffer.slice(ctx.offset, ctx.offset + length);
+  ctx.offset += length;
+
+  return value;
 }
 
 function decode_document(ctx: ICtx): any {
@@ -108,6 +120,10 @@ function decode_element(ctx: ICtx, object: any) {
 
     case ElementType.Null:
       value = null;
+      break;
+
+    case ElementType.Binary:
+      value = decode_binary(ctx);
       break;
 
     default:

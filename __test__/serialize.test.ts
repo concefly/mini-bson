@@ -1,6 +1,6 @@
 import { it, expect } from 'vitest';
 import { serialize, serializeLength } from '../src';
-import { BSON } from 'bson';
+import { Binary, BSON } from 'bson';
 import data1 from './fixtures/data1.json';
 
 it.each([
@@ -27,4 +27,13 @@ it.each([
 it('complex object', () => {
   const bin = serialize(data1);
   expect(BSON.deserialize(bin)).toEqual(data1);
+});
+
+it('uint8array', () => {
+  const array = new Uint8Array([1, 2, 3, 4]);
+  const bin = serialize({ array });
+  const parsed = BSON.deserialize(bin);
+
+  expect(Object.keys(parsed)).toEqual(['array']);
+  expect((parsed.array as Binary).toString('hex')).toEqual('01020304');
 });

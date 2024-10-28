@@ -40,7 +40,7 @@ export function serialize<T extends Record<string, any>>(obj: T, opt?: ISerializ
 
   const duplicate = opt?.duplicate;
 
-  return duplicate ? ctx.buffer.subarray(0, ctx.offset) : ctx.buffer.slice(0, ctx.offset);
+  return duplicate ? ctx.buffer.slice(0, ctx.offset) : ctx.buffer.subarray(0, ctx.offset);
 }
 
 export function serializeLength<T extends Record<string, any>>(obj: T, opt?: ISerializeCountOptions): number {
@@ -144,6 +144,21 @@ function encode_document(ctx: ICtx, value: Record<string, any> | any[]) {
   }
 }
 
+function encode_binary(ctx: ICtx, value: Uint8Array) {
+  const length = value.length;
+
+  if (ctx.dryRun) {
+    ctx.offset += 4 + 1 + length;
+    _dryRunMaxLimitTest(ctx);
+  } else {
+    encode_int32(ctx, length); // length
+    ctx.buffer[ctx.offset++] = 0; // subtype
+
+    ctx.buffer.set(value, ctx.offset); // binary data
+    ctx.offset += length;
+  }
+}
+
 // element
 function encode_element(ctx: ICtx, value: any, key: string) {
   let typeNum: ElementType;
@@ -160,11 +175,9 @@ function encode_element(ctx: ICtx, value: any, key: string) {
   } else if (typeof value === 'boolean') {
     typeNum = ElementType.Boolean;
   } else if (typeof value === 'object') {
-    if (Array.isArray(value)) {
-      typeNum = ElementType.Array;
-    } else {
-      typeNum = ElementType.Document;
-    }
+    if (Array.isArray(value)) typeNum = ElementType.Array;
+    else if (value instanceof Uint8Array) typeNum = ElementType.Binary;
+    else typeNum = ElementType.Document;
   } else {
     throw new Error('Unsupported type: ' + typeof value);
   }
@@ -208,6 +221,11 @@ function encode_element(ctx: ICtx, value: any, key: string) {
     case ElementType.Undefined:
       // skip
       break;
+
+    case ElementType.Binary:
+      encode_binary(ctx, value);
+      break;
+
     default:
       throw new Error('Unsupported type num: ' + typeNum);
   }

@@ -28,3 +28,12 @@ it('deserialize complex object', () => {
 
   expect(parsed).toEqual(data1);
 });
+
+it('deserialize Uint8Array', () => {
+  const array = new Uint8Array([1, 2, 3, 4]);
+  const bin = serialize({ array });
+  const parsed = deserialize(bin);
+
+  expect(parsed.array).toBeInstanceOf(Uint8Array);
+  expect(parsed.array).toEqual(array);
+});
